@@ -29,7 +29,7 @@
     }
     ```
 
-    Set `<package_hash>` to `12200000000000000000000000000000000000000000000000000000000000000000`, and Zig will provide the correct found value in an error message.
+    Set `<package_hash>` to `12200000000000000000000000000000000000000000000000000000000000000000` and build your package to find the correct value specified in a compiler error message.
 
     </details>
 
@@ -41,7 +41,7 @@
 
     ```zig
     const cookie = b.dependency("cookie", .{});
-    exe.addModule("cookie", cookie.module("cookie"));
+    lib.root_module.addImport("cookie", cookie.module("cookie"));
     ```
 
     </details>

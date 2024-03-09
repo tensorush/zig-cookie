@@ -1,21 +1,21 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    const root_source_file = std.Build.LazyPath.relative("src/CookieJar.zig");
+    const root_source_file = std.Build.LazyPath.relative("src/lib.zig");
 
     // Dependencies
     const datetime_dep = b.dependency("datetime", .{});
     const datetime_mod = datetime_dep.module("datetime");
 
     // Module
-    const cookie_mod = b.addModule("CookieJar", .{ .root_source_file = root_source_file });
+    const cookie_mod = b.addModule("cookie", .{ .root_source_file = root_source_file });
     cookie_mod.addImport("datetime", datetime_mod);
 
     // Library
     const lib_step = b.step("lib", "Install library");
 
     const lib = b.addStaticLibrary(.{
-        .name = "CookieJar",
+        .name = "cookie",
         .root_source_file = root_source_file,
         .target = b.standardTargetOptions(.{}),
         .optimize = b.standardOptimizeOption(.{}),
