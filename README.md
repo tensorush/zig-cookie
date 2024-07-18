@@ -38,4 +38,4 @@ const cookie_mod = cookie_dep.module("cookie");
 [cc-shd]: https://img.shields.io/codecov/c/github/tensorush/zig-cookie?style=for-the-badge&labelColor=black
 [cc-url]: https://app.codecov.io/gh/tensorush/zig-cookie
 [lc-shd]: https://img.shields.io/github/license/tensorush/zig-cookie.svg?style=for-the-badge&labelColor=black
-[lc-url]: https://github.com/tensorush/zig-cookie/blob/main/LICENSE.md
+[lc-url]: https://github.com/tensorush/zig-cookie/blob/main/LICENSE
