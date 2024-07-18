@@ -1,7 +1,7 @@
 //! HTTP cookie printing and parsing.
 
 const std = @import("std");
-const Datetime = @import("datetime").Datetime;
+const Datetime = @import("Datetime.zig");
 
 const Cookie = @This();
 
@@ -9,7 +9,7 @@ pub const Error = error{
     MissingPair,
     EmptyName,
     Utf8Error,
-};
+} || Datetime.Error;
 
 pub const Expiration = union(enum) {
     datetime: Datetime,
@@ -33,26 +33,26 @@ secure: ?bool = null,
 value: []const u8 = "",
 name: []const u8,
 
-/// Set expires field from HTTP Date value.
-pub fn setExpires(self: *Cookie, value: []const u8) !void {
-    self.expires = .{ .datetime = try Datetime.parseModifiedSince(value) };
+/// Set expires field from HTTP datetime value.
+pub fn setExpires(self: *Cookie, value: []const u8) Datetime.Error!void {
+    self.expires = .{ .datetime = try Datetime.parse(value) };
 }
 
 /// Turn into permanent cookie.
 pub fn makePermanent(self: *Cookie) void {
     self.max_age = 20 * 365 * std.time.s_per_day;
-    self.expires = .{ .datetime = Datetime.now().shiftYears(20) };
+    self.expires = .{ .datetime = Datetime.fromTimestamp(std.time.timestamp() + self.max_age) };
 }
 
 /// Turn into removal cookie.
 pub fn makeRemoval(self: *Cookie) void {
     self.value = "";
     self.max_age = 0;
-    self.expires = .{ .datetime = Datetime.now().shiftYears(1) };
+    self.expires = .{ .datetime = Datetime.fromTimestamp(std.time.timestamp() + 365 * std.time.s_per_day) };
 }
 
 /// Parse cookie from string, specifying whether name and value need escaping.
-pub fn parse(allocator: std.mem.Allocator, cookie_str: []const u8, do_escape: bool) !Cookie {
+pub fn parse(cookie_str: []const u8) Error!Cookie {
     var attr_iter = std.mem.tokenizeScalar(u8, cookie_str, ';');
     const name_value = attr_iter.next() orelse return error.MissingPair;
     const name_value_idx = std.mem.indexOfScalar(u8, name_value, '=') orelse return error.MissingPair;
@@ -61,11 +61,6 @@ pub fn parse(allocator: std.mem.Allocator, cookie_str: []const u8, do_escape: bo
 
     if (name.len == 0) {
         return error.EmptyName;
-    }
-
-    if (do_escape) {
-        name = try std.Uri.escapeString(allocator, name);
-        value = try std.Uri.escapeString(allocator, value);
     }
 
     var cookie = Cookie{ .name = name, .value = value };
@@ -109,7 +104,7 @@ pub fn parse(allocator: std.mem.Allocator, cookie_str: []const u8, do_escape: bo
         } else if (std.ascii.eqlIgnoreCase(name, "partitioned")) {
             cookie.partitioned = true;
         } else if (std.ascii.eqlIgnoreCase(name, "expires")) {
-            cookie.expires = .{ .datetime = try Datetime.parseModifiedSince(value) };
+            cookie.expires = .{ .datetime = try Datetime.parse(value) };
         }
     }
 
@@ -153,8 +148,7 @@ pub fn format(self: Cookie, comptime _: []const u8, _: std.fmt.FormatOptions, wr
 
     if (self.expires) |expires| {
         if (std.meta.activeTag(expires) == .datetime) {
-            var buf: [32]u8 = undefined;
-            try writer.print("; Expires={s}", .{try expires.datetime.formatHttpBuf(buf[0..])});
+            try writer.print("; Expires={s}", .{expires.datetime});
         }
     }
 }
@@ -199,122 +193,114 @@ test format {
 }
 
 test parse {
-    const allocator = std.testing.allocator;
-
-    var cookie = try parse(allocator, "foo=bar", false);
+    var cookie = try parse("foo=bar");
     try std.testing.expectEqualStrings(cookie.name, "foo");
     try std.testing.expectEqualStrings(cookie.value, "bar");
 
-    cookie = try parse(allocator, "foo = bar", false);
+    cookie = try parse("foo = bar");
     try std.testing.expectEqualStrings(cookie.name, "foo");
     try std.testing.expectEqualStrings(cookie.value, "bar");
 
-    cookie = try parse(allocator, " foo=bar ;Domain= ", false);
+    cookie = try parse(" foo=bar ;Domain= ");
     try std.testing.expectEqualStrings(cookie.name, "foo");
     try std.testing.expectEqualStrings(cookie.value, "bar");
 
-    cookie = try parse(allocator, "f##=b@r", true);
-    try std.testing.expectEqualStrings(cookie.name, "f%23%23");
-    try std.testing.expectEqualStrings(cookie.value, "b%40r");
-    allocator.free(cookie.name);
-    allocator.free(cookie.value);
-
-    cookie = try parse(allocator, "foo=bar; SameSite=Lax", false);
+    cookie = try parse("foo=bar; SameSite=Lax");
     try std.testing.expectEqualStrings(cookie.name, "foo");
     try std.testing.expectEqualStrings(cookie.value, "bar");
     try std.testing.expectEqual(cookie.same_site, SameSite.Lax);
 
-    cookie = try parse(allocator, "foo=bar; Expires=Mon, 08 Feb 2016 07:28:00 GMT", false);
+    cookie = try parse("foo=bar; Expires=Mon, 08 Feb 2016 07:28:00 GMT");
     try std.testing.expectEqualStrings(cookie.name, "foo");
     try std.testing.expectEqualStrings(cookie.value, "bar");
-    try std.testing.expectEqual(cookie.expires.?.datetime, try Datetime.parseModifiedSince("Mon, 08 Feb 2016 07:28:00 GMT"));
+    try std.testing.expectEqual(cookie.expires.?.datetime, try Datetime.parse("Mon, 08 Feb 2016 07:28:00 GMT"));
 
-    try std.testing.expectError(error.MissingPair, parse(allocator, "bar", false));
-    try std.testing.expectError(error.EmptyName, parse(allocator, "=bar", false));
-    try std.testing.expectError(error.EmptyName, parse(allocator, " =bar", false));
+    try std.testing.expectError(error.MissingPair, parse("bar"));
+    try std.testing.expectError(error.EmptyName, parse("=bar"));
+    try std.testing.expectError(error.EmptyName, parse(" =bar"));
 
-    cookie = try parse(allocator, "foo=bar=baz", false);
+    cookie = try parse("foo=bar=baz");
     try std.testing.expectEqualStrings(cookie.name, "foo");
     try std.testing.expectEqualStrings(cookie.value, "bar=baz");
 
-    cookie = try parse(allocator, "foo=\"\"bar\"\"", false);
+    cookie = try parse("foo=\"\"bar\"\"");
     try std.testing.expectEqualStrings(cookie.name, "foo");
     try std.testing.expectEqualStrings(cookie.value, "\"\"bar\"\"");
 
-    cookie = try parse(allocator, "foo=  \"bar", false);
+    cookie = try parse("foo=  \"bar");
     try std.testing.expectEqualStrings(cookie.value, "\"bar");
-    cookie = try parse(allocator, "foo=\"bar  ", false);
+    cookie = try parse("foo=\"bar  ");
     try std.testing.expectEqualStrings(cookie.value, "\"bar");
-    cookie = try parse(allocator, "foo=\"\"bar\"", false);
+    cookie = try parse("foo=\"\"bar\"");
     try std.testing.expectEqualStrings(cookie.value, "\"\"bar\"");
-    cookie = try parse(allocator, "foo=\"\"bar  \"", false);
+    cookie = try parse("foo=\"\"bar  \"");
     try std.testing.expectEqualStrings(cookie.value, "\"\"bar  \"");
-    cookie = try parse(allocator, "foo=\"\"bar  \"  ", false);
+    cookie = try parse("foo=\"\"bar  \"  ");
     try std.testing.expectEqualStrings(cookie.value, "\"\"bar  \"");
 
-    cookie = try parse(allocator, "foo=bar; Partitioned", false);
+    cookie = try parse("foo=bar; Partitioned");
     try std.testing.expect(cookie.partitioned.?);
 
-    cookie = try parse(allocator, "foo=bar ;HttpOnly", false);
+    cookie = try parse("foo=bar ;HttpOnly");
     try std.testing.expect(cookie.http_only.?);
 
-    cookie = try parse(allocator, "foo=bar; httponly", false);
+    cookie = try parse("foo=bar; httponly");
     try std.testing.expect(cookie.http_only.?);
 
-    cookie = try parse(allocator, "foo=bar; HTTPONLY", false);
+    cookie = try parse("foo=bar; HTTPONLY");
     try std.testing.expect(cookie.http_only.?);
 
-    cookie = try parse(allocator, "foo=bar;HTTPONLY=whatever", false);
+    cookie = try parse("foo=bar;HTTPONLY=whatever");
     try std.testing.expect(cookie.http_only.?);
 
-    cookie = try parse(allocator, "foo=bar; HttpOnly; Secure", false);
-    try std.testing.expect(cookie.http_only.?);
-    try std.testing.expect(cookie.secure.?);
-
-    cookie = try parse(allocator, "foo=bar; HttpOnly; secure=aaaa", false);
+    cookie = try parse("foo=bar; HttpOnly; Secure");
     try std.testing.expect(cookie.http_only.?);
     try std.testing.expect(cookie.secure.?);
 
-    cookie = try parse(allocator, "foo=bar; HttpOnly; Secure; Max-Age=0", false);
+    cookie = try parse("foo=bar; HttpOnly; secure=aaaa");
+    try std.testing.expect(cookie.http_only.?);
+    try std.testing.expect(cookie.secure.?);
+
+    cookie = try parse("foo=bar; HttpOnly; Secure; Max-Age=0");
     try std.testing.expectEqual(cookie.max_age.?, 0);
     try std.testing.expect(cookie.http_only.?);
     try std.testing.expect(cookie.secure.?);
 
-    cookie = try parse(allocator, "foo=bar; HttpOnly; Secure; Max-Age = 0", false);
+    cookie = try parse("foo=bar; HttpOnly; Secure; Max-Age = 0");
     try std.testing.expectEqual(cookie.max_age.?, 0);
     try std.testing.expect(cookie.http_only.?);
     try std.testing.expect(cookie.secure.?);
 
-    cookie = try parse(allocator, "foo=bar; HttpOnly; Secure; Max-Age=-1337", false);
+    cookie = try parse("foo=bar; HttpOnly; Secure; Max-Age=-1337");
     try std.testing.expectEqual(cookie.max_age.?, 0);
     try std.testing.expect(cookie.http_only.?);
     try std.testing.expect(cookie.secure.?);
 
-    cookie = try parse(allocator, "foo=bar; HttpOnly; Secure; Max-Age = -1337", false);
+    cookie = try parse("foo=bar; HttpOnly; Secure; Max-Age = -1337");
     try std.testing.expectEqual(cookie.max_age.?, 0);
     try std.testing.expect(cookie.http_only.?);
     try std.testing.expect(cookie.secure.?);
 
-    cookie = try parse(allocator, "foo=bar; HttpOnly; Secure; Max-Age =   60", false);
+    cookie = try parse("foo=bar; HttpOnly; Secure; Max-Age =   60");
     try std.testing.expectEqual(cookie.max_age.?, 60);
     try std.testing.expect(cookie.http_only.?);
     try std.testing.expect(cookie.secure.?);
 
-    cookie = try parse(allocator, "foo=bar; HttpOnly; Secure; Max-Age=4; pAth= /foo", false);
+    cookie = try parse("foo=bar; HttpOnly; Secure; Max-Age=4; pAth= /foo");
     try std.testing.expectEqualStrings(cookie.path.?, "/foo");
     try std.testing.expectEqual(cookie.max_age.?, 4);
     try std.testing.expect(cookie.http_only.?);
     try std.testing.expect(cookie.secure.?);
 
-    cookie = try parse(allocator, "foo=bar; HttpOnly; Secure; Max-Age=4; Path=/foo; Domain=www.zachtronics.com", false);
+    cookie = try parse("foo=bar; HttpOnly; Secure; Max-Age=4; Path=/foo; Domain=www.zachtronics.com");
     try std.testing.expectEqualStrings(cookie.domain.?, "www.zachtronics.com");
     try std.testing.expectEqualStrings(cookie.path.?, "/foo");
     try std.testing.expectEqual(cookie.max_age.?, 4);
     try std.testing.expect(cookie.http_only.?);
     try std.testing.expect(cookie.secure.?);
 
-    cookie = try parse(allocator, "foo=bar; HttpOnly; Secure; Max-Age=4; Path=/foo; Domain=www.zachtronics.com; Expires=Mon, 08 Feb 2016 07:28:00 GMT", false);
-    try std.testing.expectEqual(cookie.expires.?.datetime, try Datetime.parseModifiedSince("Mon, 08 Feb 2016 07:28:00 GMT"));
+    cookie = try parse("foo=bar; HttpOnly; Secure; Max-Age=4; Path=/foo; Domain=www.zachtronics.com; Expires=Mon, 08 Feb 2016 07:28:00 GMT");
+    try std.testing.expectEqual(cookie.expires.?.datetime, try Datetime.parse("Mon, 08 Feb 2016 07:28:00 GMT"));
     try std.testing.expectEqualStrings(cookie.domain.?, "www.zachtronics.com");
     try std.testing.expectEqualStrings(cookie.path.?, "/foo");
     try std.testing.expectEqual(cookie.max_age.?, 4);

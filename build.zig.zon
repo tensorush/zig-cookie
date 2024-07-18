@@ -1,11 +1,12 @@
 .{
     .name = "cookie",
     .version = "0.2.0",
-    .paths = .{""},
-    .dependencies = .{
-        .datetime = .{
-            .url = "https://github.com/frmdstryr/zig-datetime/archive/0254e29.tar.gz",
-            .hash = "122005517e1ce68ff40149628ca6db255f08cbc4c38a4bc446eda53489489db37a2c",
-        },
+    .minimum_zig_version = "0.13.0",
+    .paths = .{
+        "src/",
+        "build.zig",
+        "build.zig.zon",
+        "LICENSE",
+        "README.md",
     },
 }

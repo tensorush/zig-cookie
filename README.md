@@ -1,4 +1,4 @@
-## :lizard: :cookie: **zig cookie**
+# zig-cookie
 
 [![CI][ci-shd]][ci-url]
 [![CD][cd-shd]][cd-url]
@@ -6,45 +6,26 @@
 [![CC][cc-shd]][cc-url]
 [![LC][lc-shd]][lc-url]
 
-### Zig implementation of the [HTTP cookie specification](https://datatracker.ietf.org/doc/html/rfc6265).
+## Zig port of [cookie-rs](https://github.com/rwf2/cookie-rs) HTTP cookie jars.
 
 ### :rocket: Usage
 
-1. Add `cookie` as a dependency in your `build.zig.zon`.
+- Add `cookie` dependency to `build.zig.zon`.
 
-    <details>
+```sh
+zig fetch --save https://github.com/tensorush/zig-cookie/archive/<git_tag_or_commit_hash>.tar.gz
+```
 
-    <summary><code>build.zig.zon</code> example</summary>
+- Use `cookie` dependency in `build.zig`.
 
-    ```zig
-    .{
-        .name = "<name_of_your_package>",
-        .version = "<version_of_your_package>",
-        .dependencies = .{
-            .cookie = .{
-                .url = "https://github.com/tensorush/zig-cookie/archive/<git_tag_or_commit_hash>.tar.gz",
-                .hash = "<package_hash>",
-            },
-        },
-    }
-    ```
-
-    Set `<package_hash>` to `12200000000000000000000000000000000000000000000000000000000000000000` and build your package to find the correct value specified in a compiler error message.
-
-    </details>
-
-2. Add `cookie` as a module in your `build.zig`.
-
-    <details>
-
-    <summary><code>build.zig</code> example</summary>
-
-    ```zig
-    const cookie = b.dependency("cookie", .{});
-    lib.root_module.addImport("cookie", cookie.module("cookie"));
-    ```
-
-    </details>
+```zig
+const cookie_dep = b.dependency("cookie", .{
+    .target = target,
+    .optimize = optimize,
+});
+const cookie_mod = cookie_dep.module("cookie");
+<compile>.root_module.addImport("cookie", cookie_mod);
+```
 
 <!-- MARKDOWN LINKS -->
 

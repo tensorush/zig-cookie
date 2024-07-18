@@ -1,73 +1,71 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    const root_source_file = std.Build.LazyPath.relative("src/lib.zig");
-
-    // Dependencies
-    const datetime_dep = b.dependency("datetime", .{});
-    const datetime_mod = datetime_dep.module("datetime");
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    const root_source_file = b.path("src/lib.zig");
+    const version = std.SemanticVersion{ .major = 0, .minor = 2, .patch = 0 };
 
     // Module
-    const cookie_mod = b.addModule("cookie", .{ .root_source_file = root_source_file });
-    cookie_mod.addImport("datetime", datetime_mod);
+    _ = b.addModule("cookie", .{ .root_source_file = root_source_file });
 
     // Library
     const lib_step = b.step("lib", "Install library");
 
     const lib = b.addStaticLibrary(.{
         .name = "cookie",
+        .target = target,
+        .version = version,
+        .optimize = optimize,
         .root_source_file = root_source_file,
-        .target = b.standardTargetOptions(.{}),
-        .optimize = b.standardOptimizeOption(.{}),
-        .version = .{ .major = 0, .minor = 2, .patch = 0 },
     });
-    lib.root_module.addImport("datetime", datetime_mod);
 
     const lib_install = b.addInstallArtifact(lib, .{});
     lib_step.dependOn(&lib_install.step);
     b.default_step.dependOn(lib_step);
 
-    // Docs
-    const docs_step = b.step("docs", "Emit docs");
+    // Documentation
+    const doc_step = b.step("doc", "Emit documentation");
 
-    const docs_install = b.addInstallDirectory(.{
-        .source_dir = lib.getEmittedDocs(),
+    const doc_install = b.addInstallDirectory(.{
         .install_dir = .prefix,
-        .install_subdir = "docs",
+        .install_subdir = "doc",
+        .source_dir = lib.getEmittedDocs(),
     });
+    doc_step.dependOn(&doc_install.step);
+    b.default_step.dependOn(doc_step);
 
-    docs_step.dependOn(&docs_install.step);
-    b.default_step.dependOn(docs_step);
-
-    // Tests
-    const tests_step = b.step("test", "Run tests");
+    // Test suite
+    const tests_step = b.step("test", "Run test suite");
 
     const tests = b.addTest(.{
+        .target = target,
+        .version = version,
         .root_source_file = root_source_file,
     });
-    tests.root_module.addImport("datetime", datetime_mod);
 
     const tests_run = b.addRunArtifact(tests);
     tests_step.dependOn(&tests_run.step);
     b.default_step.dependOn(tests_step);
 
     // Code coverage
-    const cov_step = b.step("cov", "Generate code coverage report");
+    const cov_step = b.step("cov", "Generate code coverage");
 
     const cov_run = b.addSystemCommand(&.{ "kcov", "--clean", "--include-pattern=src/", "kcov-output" });
     cov_run.addArtifactArg(tests);
-
     cov_step.dependOn(&cov_run.step);
     b.default_step.dependOn(cov_step);
 
-    // Lints
-    const lints_step = b.step("lint", "Run lints");
+    // Formatting checks
+    const fmt_step = b.step("fmt", "Run formatting checks");
 
-    const lints = b.addFmt(.{
-        .paths = &.{ "src", "build.zig" },
+    const fmt = b.addFmt(.{
+        .paths = &.{
+            "src/",
+            "build.zig",
+        },
         .check = true,
     });
-
-    lints_step.dependOn(&lints.step);
-    b.default_step.dependOn(lints_step);
+    fmt_step.dependOn(&fmt.step);
+    b.default_step.dependOn(fmt_step);
 }
