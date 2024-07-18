@@ -6,7 +6,7 @@
 [![CC][cc-shd]][cc-url]
 [![LC][lc-shd]][lc-url]
 
-## Zig port of [cookie-rs](https://github.com/rwf2/cookie-rs) HTTP cookie jars.
+## Zig port of [cookie library](https://github.com/rwf2/cookie-rs) for HTTP cookie storage.
 
 ### :rocket: Usage
 
