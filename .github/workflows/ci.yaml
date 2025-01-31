@@ -24,9 +24,7 @@ jobs:
         run: zig build test --summary all
 
       - name: Set up kcov
-        run: |
-          sudo apt update
-          sudo apt install kcov
+        run: sudo apt-get update && sudo apt-get install -y kcov
 
       - name: Run `cov`
         run: zig build cov
