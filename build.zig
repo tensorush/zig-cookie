@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const root_source_file = b.path("src/lib.zig");
-    const version = std.SemanticVersion{ .major = 0, .minor = 2, .patch = 0 };
+    const version = std.SemanticVersion{ .major = 0, .minor = 2, .patch = 1 };
 
     // Module
     _ = b.addModule("cookie", .{ .root_source_file = root_source_file });

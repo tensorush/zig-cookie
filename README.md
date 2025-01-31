@@ -8,12 +8,12 @@
 
 ## Zig port of [cookie library](https://github.com/rwf2/cookie-rs) for HTTP cookie storage.
 
-### :rocket: Usage
+### Usage
 
 - Add `cookie` dependency to `build.zig.zon`.
 
 ```sh
-zig fetch --save https://github.com/tensorush/zig-cookie/archive/<git_tag_or_commit_hash>.tar.gz
+zig fetch --save git+https://github.com/tensorush/zig-cookie#<git_tag_or_commit_hash>
 ```
 
 - Use `cookie` dependency in `build.zig`.
