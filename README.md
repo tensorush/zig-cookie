@@ -3,7 +3,6 @@
 [![CI][ci-shd]][ci-url]
 [![CD][cd-shd]][cd-url]
 [![DC][dc-shd]][dc-url]
-[![CC][cc-shd]][cc-url]
 [![LC][lc-shd]][lc-url]
 
 ## Zig port of [cookie library](https://github.com/rwf2/cookie-rs) for HTTP cookie storage.
@@ -35,7 +34,5 @@ const cookie_mod = cookie_dep.module("cookie");
 [cd-url]: https://github.com/tensorush/zig-cookie/blob/main/.github/workflows/cd.yaml
 [dc-shd]: https://img.shields.io/badge/click-F6A516?style=for-the-badge&logo=zig&logoColor=F6A516&label=docs&labelColor=black
 [dc-url]: https://tensorush.github.io/zig-cookie
-[cc-shd]: https://img.shields.io/codecov/c/github/tensorush/zig-cookie?style=for-the-badge&labelColor=black
-[cc-url]: https://app.codecov.io/gh/tensorush/zig-cookie
 [lc-shd]: https://img.shields.io/github/license/tensorush/zig-cookie.svg?style=for-the-badge&labelColor=black
 [lc-url]: https://github.com/tensorush/zig-cookie/blob/main/LICENSE
