@@ -23,20 +23,6 @@ jobs:
       - name: Run `test`
         run: zig build test --summary all
 
-      - name: Set up kcov
-        run: sudo apt-get update && sudo apt-get install -y kcov
-
-      - name: Run `cov`
-        run: zig build cov
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          directory: kcov-output/
-          fail_ci_if_error: true
-          verbose: true
-
   fmt:
     runs-on: ubuntu-latest
 
