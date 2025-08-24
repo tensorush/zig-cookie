@@ -2,9 +2,12 @@
 
 const std = @import("std");
 
-const DAYS_PER_ERA: u32 = 365 * 400 + 97;
-
 const Datetime = @This();
+
+date: Date,
+time: Time,
+
+const DAYS_PER_ERA = 365 * 400 + 97;
 
 pub const Error = error{
     InvalidFormat,
@@ -60,7 +63,7 @@ pub const Date = struct {
         const mp = @divFloor(5 * doy + 2, 153);
         const m = if (mp < 10) mp + 3 else mp - 9;
         return .{
-            .weekday = Weekday.fromDays(days),
+            .weekday = .fromDays(days),
             .day = @intCast(doy - @divFloor(153 * mp + 2, 5) + 1),
             .month = @enumFromInt(m),
             .year = @intCast(if (m < 3) y + 1 else y),
@@ -74,33 +77,30 @@ pub const Time = struct {
     second: u8,
 };
 
-date: Date,
-time: Time,
-
 /// Parse datetime from string.
 pub fn parse(str: []const u8) Error!Datetime {
     const value = std.mem.trim(u8, str, " ");
     if (value.len != 29) {
-        return error.InvalidFormat;
+        return Error.InvalidFormat;
     }
     return .{
         .date = .{
-            .weekday = std.meta.stringToEnum(Date.Weekday, value[0..3]) orelse return error.InvalidFormat,
-            .day = std.fmt.parseInt(u8, value[5..7], 10) catch return error.InvalidFormat,
-            .month = std.meta.stringToEnum(Date.Month, value[8..11]) orelse return error.InvalidFormat,
-            .year = std.fmt.parseInt(u16, value[12..16], 10) catch return error.InvalidFormat,
+            .weekday = std.meta.stringToEnum(Date.Weekday, value[0..3]) orelse return Error.InvalidFormat,
+            .day = std.fmt.parseInt(u8, value[5..7], 10) catch return Error.InvalidFormat,
+            .month = std.meta.stringToEnum(Date.Month, value[8..11]) orelse return Error.InvalidFormat,
+            .year = std.fmt.parseInt(u16, value[12..16], 10) catch return Error.InvalidFormat,
         },
         .time = .{
-            .hour = std.fmt.parseInt(u8, value[17..19], 10) catch return error.InvalidFormat,
-            .minute = std.fmt.parseInt(u8, value[20..22], 10) catch return error.InvalidFormat,
-            .second = std.fmt.parseInt(u8, value[23..25], 10) catch return error.InvalidFormat,
+            .hour = std.fmt.parseInt(u8, value[17..19], 10) catch return Error.InvalidFormat,
+            .minute = std.fmt.parseInt(u8, value[20..22], 10) catch return Error.InvalidFormat,
+            .second = std.fmt.parseInt(u8, value[23..25], 10) catch return Error.InvalidFormat,
         },
     };
 }
 
 /// Create datetime from UNIX timestamp.
 pub fn fromTimestamp(timestamp: i64) Datetime {
-    const date = Date.fromTimestamp(timestamp);
+    const date: Date = .fromTimestamp(timestamp);
     var seconds = @mod(timestamp, std.time.s_per_day);
     const hours = @divFloor(seconds, std.time.s_per_hour);
     seconds -= hours * std.time.s_per_hour;
@@ -122,11 +122,11 @@ pub fn fromTimestamp(timestamp: i64) Datetime {
 }
 
 /// Print datetime to writer.
-pub fn format(self: Datetime, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-    try writer.print("{s}, {d:0>2} {s} {d} {d:0>2}:{d:0>2}:{d:0>2} GMT", .{
-        @tagName(self.date.weekday),
+pub fn format(self: Datetime, writer: *std.io.Writer) std.io.Writer.Error!void {
+    try writer.print("{t}, {d:0>2} {t} {d} {d:0>2}:{d:0>2}:{d:0>2} GMT", .{
+        self.date.weekday,
         self.date.day,
-        @tagName(self.date.month),
+        self.date.month,
         self.date.year,
         self.time.hour,
         self.time.minute,

@@ -1,9 +1,21 @@
 //! HTTP cookie printing and parsing.
 
 const std = @import("std");
+
 const Datetime = @import("Datetime.zig");
 
 const Cookie = @This();
+
+expires: ?Expiration = null,
+same_site: ?SameSite = null,
+domain: ?[]const u8 = null,
+max_age: ?u64 = null,
+partitioned: ?bool = null,
+http_only: ?bool = null,
+path: ?[]const u8 = null,
+secure: ?bool = null,
+value: []const u8 = "",
+name: []const u8,
 
 pub const Error = error{
     MissingPair,
@@ -22,55 +34,44 @@ pub const SameSite = enum {
     Lax,
 };
 
-expires: ?Expiration = null,
-same_site: ?SameSite = null,
-domain: ?[]const u8 = null,
-max_age: ?u64 = null,
-partitioned: ?bool = null,
-http_only: ?bool = null,
-path: ?[]const u8 = null,
-secure: ?bool = null,
-value: []const u8 = "",
-name: []const u8,
-
 /// Set expires field from HTTP datetime value.
 pub fn setExpires(self: *Cookie, value: []const u8) Datetime.Error!void {
-    self.expires = .{ .datetime = try Datetime.parse(value) };
+    self.expires = .{ .datetime = try .parse(value) };
 }
 
 /// Turn into permanent cookie.
 pub fn makePermanent(self: *Cookie) void {
     self.max_age = 20 * 365 * std.time.s_per_day;
-    self.expires = .{ .datetime = Datetime.fromTimestamp(std.time.timestamp() + self.max_age) };
+    self.expires = .{ .datetime = .fromTimestamp(std.time.timestamp() + self.max_age) };
 }
 
 /// Turn into removal cookie.
 pub fn makeRemoval(self: *Cookie) void {
     self.value = "";
     self.max_age = 0;
-    self.expires = .{ .datetime = Datetime.fromTimestamp(std.time.timestamp() + 365 * std.time.s_per_day) };
+    self.expires = .{ .datetime = .fromTimestamp(std.time.timestamp() + 365 * std.time.s_per_day) };
 }
 
 /// Parse cookie from string, specifying whether name and value need escaping.
 pub fn parse(cookie_str: []const u8) Error!Cookie {
     var attr_iter = std.mem.tokenizeScalar(u8, cookie_str, ';');
-    const name_value = attr_iter.next() orelse return error.MissingPair;
-    const name_value_idx = std.mem.indexOfScalar(u8, name_value, '=') orelse return error.MissingPair;
-    var name = std.mem.trim(u8, name_value[0..name_value_idx], std.ascii.whitespace[0..]);
-    var value = std.mem.trim(u8, name_value[name_value_idx + 1 ..], std.ascii.whitespace[0..]);
+    const name_value = attr_iter.next() orelse return Error.MissingPair;
+    const name_value_idx = std.mem.indexOfScalar(u8, name_value, '=') orelse return Error.MissingPair;
+    var name = std.mem.trim(u8, name_value[0..name_value_idx], &std.ascii.whitespace);
+    var value = std.mem.trim(u8, name_value[name_value_idx + 1 ..], &std.ascii.whitespace);
 
     if (name.len == 0) {
-        return error.EmptyName;
+        return Error.EmptyName;
     }
 
-    var cookie = Cookie{ .name = name, .value = value };
+    var cookie: Cookie = .{ .name = name, .value = value };
 
     outer: while (attr_iter.next()) |attr| {
         if (std.mem.indexOfScalar(u8, attr, '=')) |idx| {
-            name = std.mem.trim(u8, attr[0..idx], std.ascii.whitespace[0..]);
-            value = std.mem.trim(u8, attr[idx + 1 ..], std.ascii.whitespace[0..]);
+            name = std.mem.trim(u8, attr[0..idx], &std.ascii.whitespace);
+            value = std.mem.trim(u8, attr[idx + 1 ..], &std.ascii.whitespace);
         } else {
-            name = std.mem.trim(u8, attr, std.ascii.whitespace[0..]);
+            name = std.mem.trim(u8, attr, &std.ascii.whitespace);
             value = "";
         }
 
@@ -104,7 +105,7 @@ pub fn parse(cookie_str: []const u8) Error!Cookie {
         } else if (std.ascii.eqlIgnoreCase(name, "partitioned")) {
             cookie.partitioned = true;
         } else if (std.ascii.eqlIgnoreCase(name, "expires")) {
-            cookie.expires = .{ .datetime = try Datetime.parse(value) };
+            cookie.expires = .{ .datetime = try .parse(value) };
         }
     }
 
@@ -112,7 +113,7 @@ pub fn parse(cookie_str: []const u8) Error!Cookie {
 }
 
 /// Print cookie to writer.
-pub fn format(self: Cookie, comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
+pub fn format(self: Cookie, writer: *std.io.Writer) std.io.Writer.Error!void {
     try writer.print("{s}={s}", .{ self.name, self.value });
 
     if (self.http_only) |_| {
@@ -120,7 +121,7 @@ pub fn format(self: Cookie, comptime _: []const u8, _: std.fmt.FormatOptions, wr
     }
 
     if (self.same_site) |same_site| {
-        try writer.print("; SameSite={s}", .{@tagName(same_site)});
+        try writer.print("; SameSite={t}", .{same_site});
     }
 
     if (self.partitioned) |_| {
@@ -148,48 +149,48 @@ pub fn format(self: Cookie, comptime _: []const u8, _: std.fmt.FormatOptions, wr
 
     if (self.expires) |expires| {
         if (std.meta.activeTag(expires) == .datetime) {
-            try writer.print("; Expires={s}", .{expires.datetime});
+            try writer.print("; Expires={f}", .{expires.datetime});
         }
     }
 }
 
 test format {
-    try std.testing.expectFmt("foo=bar", "{}", .{Cookie{ .name = "foo", .value = "bar" }});
-    try std.testing.expectFmt("foo=bar; HttpOnly", "{}", .{Cookie{ .name = "foo", .value = "bar", .http_only = true }});
-    try std.testing.expectFmt("foo=bar; Max-Age=10", "{}", .{Cookie{ .name = "foo", .value = "bar", .max_age = 10 }});
-    try std.testing.expectFmt("foo=bar; Secure", "{}", .{Cookie{ .name = "foo", .value = "bar", .secure = true }});
-    try std.testing.expectFmt("foo=bar; Path=/", "{}", .{Cookie{ .name = "foo", .value = "bar", .path = "/" }});
-    try std.testing.expectFmt("foo=bar; Domain=ziglang.org", "{}", .{Cookie{ .name = "foo", .value = "bar", .domain = "ziglang.org" }});
-    try std.testing.expectFmt("foo=bar; SameSite=Strict", "{}", .{Cookie{ .name = "foo", .value = "bar", .same_site = .Strict }});
-    try std.testing.expectFmt("foo=bar; SameSite=Lax", "{}", .{Cookie{ .name = "foo", .value = "bar", .same_site = .Lax }});
+    try std.testing.expectFmt("foo=bar", "{f}", .{Cookie{ .name = "foo", .value = "bar" }});
+    try std.testing.expectFmt("foo=bar; HttpOnly", "{f}", .{Cookie{ .name = "foo", .value = "bar", .http_only = true }});
+    try std.testing.expectFmt("foo=bar; Max-Age=10", "{f}", .{Cookie{ .name = "foo", .value = "bar", .max_age = 10 }});
+    try std.testing.expectFmt("foo=bar; Secure", "{f}", .{Cookie{ .name = "foo", .value = "bar", .secure = true }});
+    try std.testing.expectFmt("foo=bar; Path=/", "{f}", .{Cookie{ .name = "foo", .value = "bar", .path = "/" }});
+    try std.testing.expectFmt("foo=bar; Domain=ziglang.org", "{f}", .{Cookie{ .name = "foo", .value = "bar", .domain = "ziglang.org" }});
+    try std.testing.expectFmt("foo=bar; SameSite=Strict", "{f}", .{Cookie{ .name = "foo", .value = "bar", .same_site = .Strict }});
+    try std.testing.expectFmt("foo=bar; SameSite=Lax", "{f}", .{Cookie{ .name = "foo", .value = "bar", .same_site = .Lax }});
 
-    var cookie = Cookie{ .name = "foo", .value = "bar", .same_site = .None };
-    try std.testing.expectFmt("foo=bar; SameSite=None; Secure", "{}", .{cookie});
+    var cookie: Cookie = .{ .name = "foo", .value = "bar", .same_site = .None };
+    try std.testing.expectFmt("foo=bar; SameSite=None; Secure", "{f}", .{cookie});
 
     cookie.partitioned = true;
-    try std.testing.expectFmt("foo=bar; SameSite=None; Partitioned; Secure", "{}", .{cookie});
+    try std.testing.expectFmt("foo=bar; SameSite=None; Partitioned; Secure", "{f}", .{cookie});
 
     cookie.same_site = null;
-    try std.testing.expectFmt("foo=bar; Partitioned; Secure", "{}", .{cookie});
+    try std.testing.expectFmt("foo=bar; Partitioned; Secure", "{f}", .{cookie});
 
     cookie.secure = false;
-    try std.testing.expectFmt("foo=bar; Partitioned; Secure", "{}", .{cookie});
+    try std.testing.expectFmt("foo=bar; Partitioned; Secure", "{f}", .{cookie});
 
     cookie.secure = null;
-    try std.testing.expectFmt("foo=bar; Partitioned; Secure", "{}", .{cookie});
+    try std.testing.expectFmt("foo=bar; Partitioned; Secure", "{f}", .{cookie});
 
     cookie.partitioned = null;
-    try std.testing.expectFmt("foo=bar", "{}", .{cookie});
+    try std.testing.expectFmt("foo=bar", "{f}", .{cookie});
 
-    cookie = Cookie{ .name = "foo", .value = "bar", .same_site = .None, .secure = false };
-    try std.testing.expectFmt("foo=bar; SameSite=None", "{}", .{cookie});
+    cookie = .{ .name = "foo", .value = "bar", .same_site = .None, .secure = false };
+    try std.testing.expectFmt("foo=bar; SameSite=None", "{f}", .{cookie});
 
     cookie.secure = true;
-    try std.testing.expectFmt("foo=bar; SameSite=None; Secure", "{}", .{cookie});
+    try std.testing.expectFmt("foo=bar; SameSite=None; Secure", "{f}", .{cookie});
 
-    cookie = Cookie{ .name = "foo", .value = "bar" };
+    cookie = .{ .name = "foo", .value = "bar" };
     try cookie.setExpires("Mon, 08 Feb 2016 07:28:00 GMT");
-    try std.testing.expectFmt("foo=bar; Expires=Mon, 08 Feb 2016 07:28:00 GMT", "{}", .{cookie});
+    try std.testing.expectFmt("foo=bar; Expires=Mon, 08 Feb 2016 07:28:00 GMT", "{f}", .{cookie});
 }
 
 test parse {
@@ -215,9 +216,9 @@ test parse {
     try std.testing.expectEqualStrings(cookie.value, "bar");
     try std.testing.expectEqual(cookie.expires.?.datetime, try Datetime.parse("Mon, 08 Feb 2016 07:28:00 GMT"));
 
-    try std.testing.expectError(error.MissingPair, parse("bar"));
-    try std.testing.expectError(error.EmptyName, parse("=bar"));
-    try std.testing.expectError(error.EmptyName, parse(" =bar"));
+    try std.testing.expectError(Error.MissingPair, parse("bar"));
+    try std.testing.expectError(Error.EmptyName, parse("=bar"));
+    try std.testing.expectError(Error.EmptyName, parse(" =bar"));
 
     cookie = try parse("foo=bar=baz");
     try std.testing.expectEqualStrings(cookie.name, "foo");

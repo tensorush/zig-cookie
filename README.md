@@ -7,7 +7,7 @@
 - Add `cookie` dependency to `build.zig.zon`.
 
 ```sh
-zig fetch --save git+https://github.com/tensorush/zig-cookie
+zig fetch --save git+https://github.com/tensorush/zig-cookie.git
 ```
 
 - Use `cookie` dependency in `build.zig`.

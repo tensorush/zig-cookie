@@ -1,24 +1,26 @@
 //! HTTP cookie jar that provides authenticated encryption.
 
 const std = @import("std");
+
 const Jar = @import("Jar.zig");
 const Key = @import("Key.zig");
 const Cookie = @import("Cookie.zig");
 
 const EncryptedJar = @This();
-const Aes256Gcm = std.crypto.aead.aes_gcm.Aes256Gcm;
-const OriginalValueMap = std.StringHashMapUnmanaged([]const u8);
 
 /// Original cookie values accessed by encrypted values.
-original_values: OriginalValueMap = OriginalValueMap{},
+original_values: OriginalValueMap = .empty,
 /// Encryption key bytes.
-key_bytes: [Key.ENCRYPTION_KEY_LEN]u8,
+key_bytes: [Key.ENCRYPTION_KEY_SIZE]u8,
 /// Basic cookie jar.
 jar: Jar,
 
+const Aes256Gcm = std.crypto.aead.aes_gcm.Aes256Gcm;
+const OriginalValueMap = std.StringHashMapUnmanaged([]const u8);
+
 /// Initialize encrypted cookie jar.
 pub fn init(allocator: std.mem.Allocator, key: Key) EncryptedJar {
-    return .{ .key_bytes = key.encryption_bytes, .jar = Jar.init(allocator) };
+    return .{ .key_bytes = key.encryption_bytes, .jar = .init(allocator) };
 }
 
 /// Deinitialize encrypted cookie jar.
@@ -33,7 +35,7 @@ pub fn deinit(self: *EncryptedJar) void {
 }
 
 /// Encrypt cookie for authenticated encryption.
-fn encrypt(self: *EncryptedJar, cookie: *Cookie) !void {
+fn encrypt(self: *EncryptedJar, cookie: *Cookie) std.mem.Allocator.Error!void {
     var value = try self.jar.allocator.alloc(u8, Aes256Gcm.nonce_length + cookie.value.len + Aes256Gcm.tag_length);
     defer self.jar.allocator.free(value);
 
@@ -43,7 +45,7 @@ fn encrypt(self: *EncryptedJar, cookie: *Cookie) !void {
     std.crypto.random.bytes(nonce);
     Aes256Gcm.encrypt(c, &tag, cookie.value, cookie.name, nonce.*, self.key_bytes);
 
-    @memcpy(value[Aes256Gcm.nonce_length + cookie.value.len ..], tag[0..]);
+    @memcpy(value[Aes256Gcm.nonce_length + cookie.value.len ..], &tag);
     const encrypted_value = try self.jar.allocator.alloc(u8, std.base64.standard.Encoder.calcSize(value.len));
     _ = std.base64.standard.Encoder.encode(encrypted_value, value);
 
@@ -60,8 +62,8 @@ fn encrypt(self: *EncryptedJar, cookie: *Cookie) !void {
 
 /// Decrypt cookie for authenticated decryption.
 fn decrypt(self: EncryptedJar, cookie: Cookie) bool {
-    const value_len = std.base64.standard.Decoder.calcSizeForSlice(cookie.value) catch return false;
-    var value = self.jar.allocator.alloc(u8, value_len) catch return false;
+    const value_size = std.base64.standard.Decoder.calcSizeForSlice(cookie.value) catch return false;
+    var value = self.jar.allocator.alloc(u8, value_size) catch return false;
     defer self.jar.allocator.free(value);
 
     std.base64.standard.Decoder.decode(value, cookie.value) catch return false;
@@ -72,7 +74,7 @@ fn decrypt(self: EncryptedJar, cookie: Cookie) bool {
 
     const nonce = value[0..Aes256Gcm.nonce_length];
     var tag: [Aes256Gcm.tag_length]u8 = undefined;
-    @memcpy(tag[0..], value[value.len - Aes256Gcm.tag_length ..]);
+    @memcpy(&tag, value[value.len - Aes256Gcm.tag_length ..]);
     Aes256Gcm.decrypt(m, c, tag, cookie.name, nonce.*, self.key_bytes) catch return false;
     return true;
 }
@@ -89,38 +91,38 @@ pub fn get(self: EncryptedJar, name: []const u8) ?Cookie {
 }
 
 /// Add cookie to encrypted jar.
-pub fn addOriginal(self: *EncryptedJar, cookie: Cookie) !void {
+pub fn addOriginal(self: *EncryptedJar, cookie: Cookie) std.mem.Allocator.Error!void {
     var new_cookie = cookie;
     try self.encrypt(&new_cookie);
     try self.jar.addOriginal(new_cookie);
 }
 
 /// Add cookie to encrypted cookie modifications storage.
-pub fn add(self: *EncryptedJar, cookie: Cookie) !void {
+pub fn add(self: *EncryptedJar, cookie: Cookie) std.mem.Allocator.Error!void {
     var new_cookie = cookie;
     try self.encrypt(&new_cookie);
     try self.jar.add(new_cookie);
 }
 
 /// Remove cookie from encrypted cookie modifications storage.
-pub fn remove(self: *EncryptedJar, cookie: Cookie) !void {
+pub fn remove(self: *EncryptedJar, cookie: Cookie) std.mem.Allocator.Error!void {
     try self.jar.remove(cookie);
 }
 
 test EncryptedJar {
-    const key = Key.initFrom(&.{ 89, 202, 200, 125, 230, 90, 197, 245, 166, 249, 34, 169, 135, 31, 20, 197, 94, 154, 254, 79, 60, 26, 8, 143, 254, 24, 116, 138, 92, 225, 159, 60, 157, 41, 135, 129, 31, 226, 196, 16, 198, 168, 134, 4, 42, 1, 196, 24, 57, 103, 241, 147, 201, 185, 233, 10, 180, 170, 187, 89, 252, 137, 110, 107 });
-    var Encrypted = EncryptedJar.init(std.testing.allocator, key);
-    defer Encrypted.deinit();
+    const key: Key = .initFrom(&.{ 89, 202, 200, 125, 230, 90, 197, 245, 166, 249, 34, 169, 135, 31, 20, 197, 94, 154, 254, 79, 60, 26, 8, 143, 254, 24, 116, 138, 92, 225, 159, 60, 157, 41, 135, 129, 31, 226, 196, 16, 198, 168, 134, 4, 42, 1, 196, 24, 57, 103, 241, 147, 201, 185, 233, 10, 180, 170, 187, 89, 252, 137, 110, 107 });
+    var encrypted: EncryptedJar = .init(std.testing.allocator, key);
+    defer encrypted.deinit();
 
-    try Encrypted.add(.{ .name = "encrypted_with_ring014", .value = "Tamper-proof" });
-    try Encrypted.add(.{ .name = "encrypted_with_ring016", .value = "Tamper-proof" });
+    try encrypted.add(.{ .name = "encrypted_with_ring014", .value = "Tamper-proof" });
+    try encrypted.add(.{ .name = "encrypted_with_ring016", .value = "Tamper-proof" });
 
-    try std.testing.expectEqualStrings(Encrypted.get("encrypted_with_ring014").?.value, "Tamper-proof");
-    try std.testing.expectEqualStrings(Encrypted.get("encrypted_with_ring016").?.value, "Tamper-proof");
+    try std.testing.expectEqualStrings(encrypted.get("encrypted_with_ring014").?.value, "Tamper-proof");
+    try std.testing.expectEqualStrings(encrypted.get("encrypted_with_ring016").?.value, "Tamper-proof");
 }
 
 test "simple" {
-    var signed = EncryptedJar.init(std.testing.allocator, Key.initRandom());
+    var signed: EncryptedJar = .init(std.testing.allocator, Key.initRandom());
     defer signed.deinit();
 
     var jar_iter = signed.jar.iterator();
@@ -155,7 +157,7 @@ test "simple" {
 }
 
 test "secure" {
-    var signed = EncryptedJar.init(std.testing.allocator, Key.initRandom());
+    var signed: EncryptedJar = .init(std.testing.allocator, Key.initRandom());
     defer signed.deinit();
 
     try signed.add(.{ .name = "secure", .value = "secure" });

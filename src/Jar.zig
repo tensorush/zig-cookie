@@ -1,9 +1,18 @@
 //! HTTP cookie jar that provides modification tracking.
 
 const std = @import("std");
+
 const Cookie = @import("Cookie.zig");
 
 const Jar = @This();
+
+/// Original cookies accessed by name.
+originals: DeltaCookieMap = .empty,
+/// Cookie modifications accessed by name.
+deltas: DeltaCookieMap = .{},
+/// Internal allocator.
+allocator: std.mem.Allocator,
+
 const DeltaCookieMap = std.StringHashMapUnmanaged(DeltaCookie);
 
 /// Cookie that knows if it should be removed on client-side when sent to client.
@@ -11,13 +20,6 @@ pub const DeltaCookie = struct {
     is_removal: bool = false,
     cookie: Cookie,
 };
-
-/// Original cookies accessed by name.
-originals: DeltaCookieMap = DeltaCookieMap{},
-/// Cookie modifications accessed by name.
-deltas: DeltaCookieMap = DeltaCookieMap{},
-/// Internal allocator.
-allocator: std.mem.Allocator,
 
 /// Initialize cookie jar.
 pub fn init(allocator: std.mem.Allocator) Jar {
@@ -38,17 +40,17 @@ pub fn get(self: Jar, name: []const u8) ?Cookie {
 }
 
 /// Add cookie to jar.
-pub fn addOriginal(self: *Jar, cookie: Cookie) !void {
+pub fn addOriginal(self: *Jar, cookie: Cookie) std.mem.Allocator.Error!void {
     try self.originals.put(self.allocator, cookie.name, .{ .cookie = cookie });
 }
 
 /// Add cookie to cookie modifications storage.
-pub fn add(self: *Jar, cookie: Cookie) !void {
+pub fn add(self: *Jar, cookie: Cookie) std.mem.Allocator.Error!void {
     try self.deltas.put(self.allocator, cookie.name, .{ .cookie = cookie });
 }
 
 /// Remove cookie from cookie modifications storage.
-pub fn remove(self: *Jar, cookie: Cookie) !void {
+pub fn remove(self: *Jar, cookie: Cookie) std.mem.Allocator.Error!void {
     var removed = cookie;
     if (self.originals.contains(removed.name)) {
         removed.makeRemoval();
@@ -104,7 +106,7 @@ pub const Iterator = struct {
 };
 
 test Jar {
-    var jar = Jar.init(std.testing.allocator);
+    var jar: Jar = .init(std.testing.allocator);
     defer jar.deinit();
 
     try jar.addOriginal(.{ .name = "original", .value = "original" });
