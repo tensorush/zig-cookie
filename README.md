@@ -4,13 +4,13 @@
 
 ### Usage
 
-- Add `cookie` dependency to `build.zig.zon`.
+1. Add `cookie` dependency to `build.zig.zon`:
 
 ```sh
 zig fetch --save git+https://github.com/tensorush/zig-cookie.git
 ```
 
-- Use `cookie` dependency in `build.zig`.
+2. Use `cookie` dependency in `build.zig`:
 
 ```zig
 const cookie_dep = b.dependency("cookie", .{

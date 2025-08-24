@@ -1,7 +1,7 @@
 .{
     .name = .cookie,
-    .fingerprint = 0x8ae0ba6611e7a9c1,
     .version = "0.3.0",
+    .fingerprint = 0x8ae0ba6611e7a9c1, // Changing this has security and trust implications.
     .minimum_zig_version = "0.15.1",
     .paths = .{
         "src/",
