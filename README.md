@@ -18,5 +18,10 @@ const cookie_dep = b.dependency("cookie", .{
     .optimize = optimize,
 });
 const cookie_mod = cookie_dep.module("cookie");
-<compile>.root_module.addImport("cookie", cookie_mod);
+
+...
+    .imports = &.{
+        .{ .name = "cookie", .module = cookie_mod },
+    },
+...
 ```
