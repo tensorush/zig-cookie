@@ -19,9 +19,11 @@ const cookie_dep = b.dependency("cookie", .{
 });
 const cookie_mod = cookie_dep.module("cookie");
 
-...
+const root_mod = b.createModule(.{
+    .target = target,
+    .optimize = optimize,
     .imports = &.{
         .{ .name = "cookie", .module = cookie_mod },
     },
-...
+});
 ```
